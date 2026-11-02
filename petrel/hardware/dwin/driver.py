@@ -8,6 +8,7 @@ renderers used by Petrel to preserve its current visual output.
 
 import logging
 import math
+import os
 import struct
 import time
 import unicodedata
@@ -182,8 +183,12 @@ class T5UIC1Display:
                     raise T5UIC1TimeoutError("DWIN handshake timed out")
             # The panel CFG already selects portrait orientation. Preserve
             # its power-on picture instead of reapplying direction via 0x34.
-            from petrel.artwork.boot import sync
-            sync(self)
+            # DACAI panels (e.g. Ender 3 Max Neo) load artwork from their
+            # microSD 'private' folder; UART Picture Flash writes corrupt them.
+            sd_assets = os.environ.get('PETREL_LCD_SD_ASSETS') == '1'
+            if not sd_assets:
+                from petrel.artwork.boot import sync
+                sync(self)
             # Present the complete boot frame before packing/checking icons.
             # Existing panel icons can animate throughout an unchanged sync.
             if startup_progress is not None:
@@ -191,8 +196,11 @@ class T5UIC1Display:
                 self.show_jpeg(0)
                 startup_progress(self, 40)
                 self.update()
-            self._startup_sync_icons()
-            self._startup_sync_shared_artwork()
+            if sd_assets:
+                self._assets_synced = True
+            else:
+                self._startup_sync_icons()
+                self._startup_sync_shared_artwork()
             from petrel.artwork.resources import ICON_LIBRARY_ID
             self._boot_animation_library = ICON_LIBRARY_ID
             if startup_progress is not None:
