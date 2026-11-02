@@ -4,7 +4,7 @@ from petrel.artwork.resources import ICON_INFO_UPDATE_SELECTED, ICON_INFO_UPDATE
 from petrel.ui.numbers import fixed, js_round
 import textwrap
 from petrel.features.software_update.updater import SoftwareUpdate
-from petrel.features.info.qr import PROJECT_URL, draw_project_qr, extra_info_rows
+from petrel.features.info.qr import PROJECT_URL, draw_project_qr, extra_info_rows, qr_hidden
 from petrel.features.nfc.share_view import NFCShareViewMixin
 from petrel.artwork.shared import PICTURE_ID as SHARED_PICTURE_ID
 from petrel.features.info.system import wifi_signal_text
@@ -201,8 +201,9 @@ class InfoViewMixin(NFCShareViewMixin):
             ('row', 'Klipper', self.pd.SHORT_BUILD_VERSION),
             ('row', 'Moonraker', info.get('moonraker', 'Unavailable')),
             ('row', 'Mainsail', info.get('mainsail', 'Unavailable')),
-            ('qr', 'Scan for project info', PROJECT_URL),
         ])
+        if not qr_hidden():
+            items.append(('qr', 'Scan for project info', PROJECT_URL))
         items.append(('update', '', None))
         return items
 

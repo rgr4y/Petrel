@@ -1,3 +1,4 @@
+import os
 """Copy the visible project QR region from shared picture Area 1."""
 from petrel.artwork.shared import PICTURE_ID
 from petrel.artwork.shared_layout import QR_BOX
@@ -5,8 +6,15 @@ from petrel.artwork.shared_layout import QR_BOX
 PROJECT_URL = 'https://github.com/sezgynus/Petrel'
 
 
+def qr_hidden():
+    """QR code on the Info page switched off (PETREL_HIDE_QR=1)."""
+    return os.environ.get('PETREL_HIDE_QR') == '1'
+
+
 def extra_info_rows():
     """QR height plus two spacer rows before the update control."""
+    if qr_hidden():
+        return 1
     return (QR_BOX[3] - QR_BOX[1] + 23) // 24 + 2
 
 
