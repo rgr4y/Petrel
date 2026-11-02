@@ -6,6 +6,7 @@ inside a payload: memory replies and auxiliary uploads carry explicit lengths.
 
 HEADER = b'\xaa'
 TAIL = b'\xcc\x33\xc3\x3c'
+BARE_FLASH_ACK = b'\xa5OK'
 MAX_DATA_LENGTH = 248
 FIXED_RX_PAYLOAD = {0x00: 2, 0x31: 3, 0x33: 2, 0x34: 2, 0xff: 1}
 
@@ -30,7 +31,18 @@ def take_response(buffer):
     """
     while True:
         start = buffer.find(HEADER)
+        # Some Creality panels (e.g. Ender 3 Max Neo) acknowledge data-Flash
+        # writes with a bare A5 'OK' instead of a framed 0x31 reply.
+        bare = buffer.find(BARE_FLASH_ACK)
+        if bare >= 0 and (start < 0 or bare < start):
+            del buffer[:bare + len(BARE_FLASH_ACK)]
+            return 0x31, BARE_FLASH_ACK
         if start < 0:
+            # Keep a possibly incomplete bare ACK prefix for the next read.
+            for keep in (2, 1):
+                if bytes(buffer[-keep:]) == BARE_FLASH_ACK[:keep]:
+                    del buffer[:-keep]
+                    return None
             buffer.clear()
             return None
         if start:
