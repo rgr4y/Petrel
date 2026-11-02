@@ -18,6 +18,8 @@ def device_icon(device):
     if device.startswith('extruder'): return 9
     if device=='heater_bed': return 10
     if device.startswith('heater_'): return 26
+    axis_badges={'stepper_x':21,'axis_x':21,'stepper_y':22,'axis_y':22,'stepper_z':23,'axis_z':23}
+    if device in axis_badges: return axis_badges[device]
     if device.startswith(('stepper_','axis_','manual_stepper ')): return 17
     if device.startswith('endstop '): return 19
     if device.startswith('tmc'): return ICON_MCU
@@ -26,6 +28,10 @@ def device_icon(device):
     if 'buzzer' in device: return ICON_BUZZER
     if 'probe' in device: return ICON_PROBE_CALIBRATION
     if device.startswith('mcu'): return ICON_MCU
+    if device.startswith('filament_'): return 188
+    if device.startswith('temperature_host ') or device.endswith(' raspberry_pi'): return ICON_HOST
+    if device=='temperature_sensor mcu': return ICON_MCU
+    if device.startswith(('temperature_sensor ','temperature_')): return 26
     return None
 
 
@@ -56,10 +62,17 @@ def icon_for(choice):
         finding=value[0] if isinstance(value,tuple) else value
         features=getattr(finding,'evidence_features',())
         return feature_icon(features[0],finding.device) if features else device_icon(finding.device)
+    if action=='service_kind' and isinstance(value,tuple) and len(value)>1:
+        kind_icons={'belt':186,'lead_screw':187,'mechanical':ICON_SCREW_ADJUST,
+                    'nozzle':24,'filament_feed':24,'heating':26,'fan':30,'sensor':19,
+                    'electronics':ICON_MCU}
+        if value[1] in kind_icons: return kind_icons[value[1]]
     if action in ('service','service_add','service_basis','service_kind'): return ICON_MAINTENANCE_CARE
     if action=='service_device': return device_icon(value)
     if action=='service_task':
         policy=value[0]
+        if policy.task_id=='belt': return 186
+        if policy.task_id=='lead_screw': return 187
         return ICON_SCREW_ADJUST if policy.task_id in ('lubricate','mechanical') else 24 if policy.task_id in ('nozzle_inspect','nozzle','filament_feed') else ICON_MAINTENANCE_CARE
     if action in ('history','load_history','history_read'): return 15
     if action=='historical_result': return feature_icon(value.get('feature',''),value.get('device'))

@@ -12,7 +12,7 @@ from petrel.features.maintenance.ui.experience import Choice
 
 class CareClassTests(unittest.TestCase):
     def test_classes_follow_object_types_never_custom_names(self):
-        cases={'stepper_x':('mechanical',),'manual_stepper lift':('mechanical',),
+        cases={'stepper_x':('belt','mechanical'),'stepper_z':('lead_screw','mechanical'),'manual_stepper lift':('mechanical',),
             'extruder':('filament_feed','nozzle','heating'),'extruder1':('filament_feed','nozzle','heating'),
             'heater_bed':('heating',),'fan':('fan',),'temperature_fan case':('fan',),
             'output_pin fan':('connected_device',),'pwm_cycle_time buzzer':('connected_device',),
@@ -41,9 +41,9 @@ class CareClassTests(unittest.TestCase):
     def test_single_class_skips_choice_and_back_returns_to_devices(self):
         view=display(snapshot());view._maintenance_init();view._maintenance_page='service_devices'
         view._maintenance_options=lambda:((),())
-        view._maintenance_dispatch(Choice('X axis','service_device','stepper_x'))
+        view._maintenance_dispatch(Choice('Lift','service_device','manual_stepper lift'))
         self.assertEqual(view._maintenance_page,'service_basis')
-        self.assertEqual(view._maintenance_context,('stepper_x','mechanical'))
+        self.assertEqual(view._maintenance_context,('manual_stepper lift','mechanical'))
         self.assertIn('Mechanical maintenance',str(view._maintenance_screen()))
         view._maintenance_dispatch(Choice('Back','back'))
         self.assertEqual(view._maintenance_page,'service_devices')

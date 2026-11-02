@@ -64,6 +64,15 @@ def device_name(name):
            'axis_x':'X travel','axis_y':'Y travel','axis_z':'Z travel'}
     if name in known:
         return known[name]
+    friendly={'mcu':'Mainboard','probe':'BLTouch probe','bltouch':'BLTouch probe',
+              'temperature_sensor mcu':'Mainboard temperature',
+              'temperature_sensor raspberry_pi':'Pi temperature'}
+    if name in friendly:
+        return friendly[name]
+    if name.startswith('temperature_host '):
+        return 'Raspberry Pi'
+    if name.startswith(('filament_switch_sensor ','filament_motion_sensor ')):
+        return 'Filament sensor'
     if name.startswith('endstop '):
         return device_name(name[8:])+' endstop'
     chip,separator,stepper=name.partition(' ')

@@ -4,6 +4,8 @@ from collections.abc import Mapping
 MAX_CARE_DEVICES = 256
 TASKS = {
     'mechanical':'Mechanical maintenance',
+    'belt':'Belt & roller check',
+    'lead_screw':'Lead screw clean & lube',
     'filament_feed':'Filament feed maintenance',
     'nozzle':'Nozzle maintenance',
     'heating':'Heating system maintenance',
@@ -53,6 +55,10 @@ def family(device):
 
 def tasks(device):
     kind=family(device)
+    if device in ('stepper_x','stepper_y'):
+        return ('belt','mechanical')
+    if device=='stepper_z':
+        return ('lead_screw','mechanical')
     return ('filament_feed','nozzle','heating') if kind=='extruder' else (kind,)
 
 
@@ -93,6 +99,8 @@ def inventory(objects,settings,existing=()):
 # overwrite an existing service policy or its counter baseline.
 REMINDER_DEFAULTS = {
     'xy_axis': (90, 200, None, 30000, None),
+    'belt': (90, 100, None, None, None),
+    'lead_screw': (180, 200, None, None, None),
     'z_axis': (180, 500, None, 10, None),
     'mechanical': (180, 300, None, None, None),
     'endstop': (180, 500, None, None, 500),
@@ -131,7 +139,9 @@ def reminder_default(device, task, basis):
     """
     if not isinstance(device, str) or basis not in REMINDER_BASIS_INDEX:
         raise ValueError('invalid_reminder_default')
-    if device in ('stepper_x', 'stepper_y', 'axis_x', 'axis_y'):
+    if task in ('belt', 'lead_screw'):
+        profile = task
+    elif device in ('stepper_x', 'stepper_y', 'axis_x', 'axis_y'):
         profile = 'xy_axis'
     elif device in ('stepper_z', 'axis_z'):
         profile = 'z_axis'

@@ -99,6 +99,10 @@ class ExistingAxisReminderTests(unittest.TestCase):
                 self.assertEqual(sum(c.value==device for c in choices),1)
                 self.assertFalse(any(c.value=='axis_'+axis for c in choices))
                 view._maintenance_dispatch(next(c for c in choices if c.value==device))
+                # Axis steppers offer belt/lead-screw care beside mechanical
+                self.assertEqual(view._maintenance_page,'service_kind')
+                choices=view._maintenance_screen().choices
+                view._maintenance_dispatch(next(c for c in choices if c.value==(device,'mechanical')))
                 self.assertEqual(view._maintenance_page,'service_basis')
                 choices=view._maintenance_screen().choices
                 self.assertTrue(any(c.value==(device,'mechanical','travel_mm') for c in choices))
