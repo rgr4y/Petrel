@@ -24,6 +24,9 @@ import petrel.features.buzzer.control as buzzer_control
 import serial
 from petrel.ui.theme import BACKGROUND_COLOR
 
+# DACAI: thumbnails drawn from rectangles instead of SRAM JPEG (0x24).
+RECT_THUMBNAILS = os.environ.get('PETREL_RECT_THUMBNAILS') == '1'
+
 
 class T5UIC1ProtocolError(RuntimeError):
     """Raised when a panel response is malformed or does not match a request."""
@@ -795,8 +798,55 @@ class T5UIC1Display:
     def show_sram_jpeg(self, x, y, address=0, *, background=True, enhanced=False):
         if not isinstance(address, int) or not 0 <= address < self.SRAM_SIZE:
             raise ValueError("SRAM address outside 32KB range")
+        if RECT_THUMBNAILS:
+            self._draw_shadow_jpeg(x, y, address, background)
+            return
         mode = (bool(background) << 7) | (bool(enhanced) << 5)
         self._send(0x24, self._words(x, y) + bytes((mode,)) + self._word(address))
+
+    def _draw_shadow_jpeg(self, x, y, address, background, tolerance=10, black=24):
+        shadow = getattr(self, '_sram_shadow', None)
+        if shadow is None:
+            return
+        end = shadow.find(b'\xff\xd9', address)
+        if end < 0:
+            return
+        try:
+            import io
+            from PIL import Image
+            img = Image.open(io.BytesIO(bytes(shadow[address:end + 2]))).convert('RGB')
+        except Exception:
+            logging.exception('Thumbnail decode failed')
+            return
+        w, h = img.size
+        px = img.load()
+        frames = bytearray()
+        for yy in range(h):
+            xx = 0
+            while xx < w:
+                c = px[xx, yy]
+                if not background and max(c) < black:
+                    xx += 1
+                    continue
+                start, acc = xx, [c]
+                xx += 1
+                while xx < w:
+                    c2 = px[xx, yy]
+                    if not background and max(c2) < black:
+                        break
+                    if max(abs(a - b) for a, b in zip(c2, acc[0])) > tolerance:
+                        break
+                    acc.append(c2)
+                    xx += 1
+                n = len(acc)
+                r, g, b = (sum(v[i] for v in acc) // n for i in range(3))
+                color = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
+                frames += (self.HEADER + b'\x05\x01' +
+                           struct.pack('>HHHHH', color, x + start, y + yy, x + xx - 1, y + yy) + self.TAIL)
+        with self._transaction_lock:
+            for i in range(0, len(frames), 2048):
+                self.serial.write(bytes(frames[i:i + 2048]))
+        self._needs_update = True
 
     def cache_jpeg(self, jpeg_id, area=1):
         if not isinstance(jpeg_id, int) or not 0 <= jpeg_id <= 15:
@@ -872,6 +922,13 @@ class T5UIC1Display:
             raise ValueError("memory write must not be empty")
         if not 0 <= address < limit or address + len(data) > limit:
             raise ValueError("memory write outside selected memory range")
+
+        if memory == self.MEMORY_SRAM and RECT_THUMBNAILS:
+            shadow = getattr(self, '_sram_shadow', None)
+            if shadow is None:
+                shadow = self._sram_shadow = bytearray(self.SRAM_SIZE)
+            shadow[address:address + len(data)] = data
+            return
 
         with self._transaction_lock:
             offset = 0
