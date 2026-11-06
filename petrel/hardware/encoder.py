@@ -1,6 +1,5 @@
 # Class to monitor a rotary encoder and update a value using gpiozero + LGPIOFactory.
 from gpiozero import Device, RotaryEncoder
-from gpiozero.pins.lgpio import LGPIOFactory
 from threading import Lock
 
 # Use LGPIO as pin factory to avoid RPi.GPIO edge detection issues
@@ -9,6 +8,7 @@ class Encoder:
 
     def __init__(self, leftPin, rightPin, callback=None):
         if Device.pin_factory is None:
+            from gpiozero.pins.lgpio import LGPIOFactory
             Device.pin_factory = LGPIOFactory()
         self.value = 0
         self.state = '00'

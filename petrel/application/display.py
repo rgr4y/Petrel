@@ -40,7 +40,7 @@ from petrel.features.power.lifecycle import PowerMonitor
 
 from petrel.hardware.encoder import Encoder
 from gpiozero import Button, Device
-from gpiozero.pins.lgpio import LGPIOFactory
+from petrel.hardware.klipper_input import pin_factory
 from petrel.printer.interface import PrinterData
 from petrel.hardware.dwin.driver import T5UIC1Display, T5UIC1ProtocolError
 from petrel.artwork.resources import ICON_DISPLAY_NORMAL, ICON_DISPLAY_SELECTED, ICON_MMU_HOME_NORMAL, ICON_MMU_HOME_SELECTED
@@ -334,7 +334,7 @@ class PetrelDisplay(
             self._emulator = Emulator(enabled=True, font_path=font)
             self._screenshot_server = ScreenshotServer(self._emulator, socket_path, output)
         USARTx, encoder_pins, button_pin, api_key, url, timeout, settings_path, power_device, power_on_hold_ms = self._settings
-        Device.pin_factory = LGPIOFactory()
+        Device.pin_factory = pin_factory((encoder_pins[0], encoder_pins[1], button_pin))
         for name in self.SELECTIONS:
             setattr(self, name, select_t())
         self.encoder = Encoder(encoder_pins[0], encoder_pins[1])
