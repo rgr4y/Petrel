@@ -3,10 +3,17 @@ from petrel.artwork.resources import ICON_BOOT_FIRST, ICON_BOOT_LAST
 from petrel.ui.theme import show_icon as show_theme_icon
 from petrel.artwork.resources import ICON_PROGRESS_TRACK, ICON_PROGRESS_FILL
 import petrel.features.display_settings.settings as display_settings
+import os
 import time
 import logging
 import petrel.features.buzzer.control as buzzer_control
 from petrel.features.buzzer.control import Settings as BuzzerSettings
+
+
+def default_buzzer_settings():
+    """Buzzer settings until the panel's saved record is read (or when it has none).
+    PETREL_BUZZER_DEFAULT_OFF=1 starts quiet; the menu toggle still saves to panel Flash."""
+    return BuzzerSettings(enabled=os.environ.get('PETREL_BUZZER_DEFAULT_OFF') != '1')
 from petrel.hardware.dwin.startup import PanelProbe
 from petrel.hardware.dwin.driver import T5UIC1Display, T5UIC1ProtocolError
 
@@ -213,7 +220,7 @@ class PanelStartupMixin:
                     self._display_values = [100, 0, 10]
                     self._display_saved = (100, 0, 10)
                 if not hasattr(self, '_buzzer_values'):
-                    self._buzzer_values = self._buzzer_saved = BuzzerSettings()
+                    self._buzzer_values = self._buzzer_saved = default_buzzer_settings()
                 self._panel_flash_lcd = self.lcd
                 if not getattr(self, '_display_load_complete', False):
                     self._display_load_future = self.lcd.begin_flash_read(
@@ -257,7 +264,7 @@ class PanelStartupMixin:
                         logging.warning('Buzzer settings unavailable; sounds disabled')
                         values = None
                         buzzer_read_ok = False
-                    self._buzzer_values = values if isinstance(values, BuzzerSettings) else BuzzerSettings()
+                    self._buzzer_values = values if isinstance(values, BuzzerSettings) else default_buzzer_settings()
                     self._buzzer_saved = self._buzzer_values
                     if buzzer_read_ok:
                         self._buzzer_load_complete = True
