@@ -38,7 +38,16 @@ def find_chip(root=Path('/sys/class/pwm')):
     raise OSError('BCM2835 hardware PWM sysfs device not uniquely available')
 
 
-class HardwarePWM:
+def HardwarePWM(gpio=None, root=Path('/sys/class/pwm')):
+    """Buzzer driver: the printer board's beeper via Klipper when the knob comes from
+    Klipper (PETREL_KLIPPER_INPUT), else BCM hardware PWM."""
+    if os.environ.get('PETREL_KLIPPER_INPUT'):
+        from petrel.hardware.klipper_input import KlipperBeeper
+        return KlipperBeeper(os.environ['PETREL_KLIPPER_INPUT'])
+    return BcmPWM(gpio, root)
+
+
+class BcmPWM:
     def __init__(self, gpio=None, root=Path('/sys/class/pwm')):
         gpio = selected_gpio() if gpio is None else gpio
         if gpio not in PWM_PINS:

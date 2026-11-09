@@ -71,6 +71,15 @@ def main():
     os.write(master, b'7')
     print('ok: first turn -> %+d, back to 0, click, hold' % first)
 
+    # Buzzer goes back over the same pty to Klipper's beeper pin.
+    from buzzer_pwm import HardwarePWM
+    beeper = HardwarePWM()
+    beeper.tone(2000, 50)
+    beeper.off()
+    time.sleep(0.05)
+    assert os.read(master, 256) == b'B2000 0.2500\nB0 0.0000\n'
+    print('ok: beeper lines')
+
 
 if __name__ == '__main__':
     main()

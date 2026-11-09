@@ -7,6 +7,9 @@ Those levels drive gpiozero mock pins, so RotaryEncoder/Button decoding,
 debounce and hold timing stay exactly as on GPIO.
 
 Pin order in Klipper's input_pins must match (encoder A, encoder B, button).
+
+KlipperBeeper writes "B<freq> <duty>\n" back on the same pty; Klipper's
+[uart_bridge] beeper option plays it on the board's beeper pin.
 """
 import os
 import threading
@@ -77,3 +80,50 @@ def _feed(factory, path, pins):
         finally:
             os.close(fd)
         time.sleep(1)
+
+
+class KlipperBeeper:
+    """Buzzer driver (HardwarePWM interface) for the printer board's beeper."""
+    def __init__(self, path):
+        self.path = path
+        self.fd = None
+
+    def _send(self, frequency, duty):
+        line = b'B%d %.4f\n' % (round(frequency), duty)
+        for _ in range(2):  # reopen once: Klipper restarts make a new pty
+            try:
+                if self.fd is None:
+                    self.fd = os.open(self.path, os.O_WRONLY | os.O_NONBLOCK)
+                os.write(self.fd, line)
+                return
+            except OSError:
+                self.close_fd()
+        raise OSError('Klipper beeper channel unavailable: ' + self.path)
+
+    def close_fd(self):
+        if self.fd is not None:
+            try:
+                os.close(self.fd)
+            except OSError:
+                pass
+            self.fd = None
+
+    def tone(self, frequency, volume):
+        if not 0 <= volume <= 100:
+            raise ValueError('Invalid volume')
+        self.set_pwm(frequency, volume / 200.)
+
+    def set_pwm(self, frequency, duty):
+        if not 1 <= frequency <= 20000 or not 0 <= duty <= 1:
+            raise ValueError('Invalid frequency/duty')
+        self._send(frequency if duty else 0, duty)
+
+    def off(self):
+        self._send(0, 0.)
+
+    def close(self):
+        try:
+            self.off()
+        except OSError:
+            pass
+        self.close_fd()
