@@ -166,7 +166,7 @@ class FirmwareWorkflow:
 
     def validate(self, values, action):
         settings = self._printer.state.settings
-        idle_heaters(settings, values)
+        self.check_heaters(settings, values, action)
         if self.requires_homing:
             th = values.get('toolhead', {})
             if not set('xyz') <= set(th.get('homed_axes', '')):
@@ -185,6 +185,9 @@ class FirmwareWorkflow:
             if (config.get('save_config_pending') is not False or
                     config.get('save_config_pending_items') not in ({}, None)):
                 raise ValueError('existing_pending_config')
+
+    def check_heaters(self, settings, values, action):
+        idle_heaters(settings, values)
 
     def script(self, action, values):
         raise NotImplementedError

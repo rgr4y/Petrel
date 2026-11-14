@@ -1,6 +1,7 @@
 """Probe diagnostics and firmware calibrations, excluding Leveling duplicates."""
 from collections.abc import Mapping
 import math
+import os
 import re
 from uuid import uuid4
 
@@ -13,6 +14,8 @@ LEVELING_ONLY = frozenset(('P05','P07','P08','P09','P10','P11'))
 METHODS = {**{f:AUTOMATIC for f in ('P01','P02','P03','P04','P20')},
            **{f:CALIBRATION for f in ('P06','P12','P13','P14','P15','P16','P17','P18','P22')},
            'P19':USER, 'P21':EXTERNAL}
+# Bed screws are adjusted against a warm bed; start heats it (M190) when unset.
+BED_SCREWS_TEMP = float(os.environ.get('PETREL_BED_SCREWS_TEMP', '65'))
 _FLOAT = r'([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)'
 
 
@@ -104,6 +107,8 @@ class MaintenanceProbeController(FirmwareWorkflow):
             return ('Use measured skew print', 'AC / BD diagonals, AD side')
         if self.feature_id == 'P22':
             return ('No automatic heater command', 'Externally controlled warming')
+        if self.feature_id == 'P12':
+            return ('Home XYZ first', 'Bed heats to %g C' % BED_SCREWS_TEMP)
         return ('Home XYZ / clear tool path', 'Pending config is NOT saved')
 
     @property
@@ -214,6 +219,19 @@ class MaintenanceProbeController(FirmwareWorkflow):
             raise ValueError('select_unambiguous_eddy_sensor')
         return safe_name(names[0].split(' ',1)[1])
 
+    def check_heaters(self, settings, values, action):
+        if self.feature_id != 'P12':
+            return super().check_heaters(settings, values, action)
+        # Extruder temperature is ignored. Start heats the bed; every later
+        # step needs it at target so screw feel matches printing conditions.
+        if action in ('start', 'abort'):
+            return
+        bed = values.get('heater_bed')
+        if (not isinstance(bed, Mapping) or not number(bed.get('target'))
+                or bed['target'] <= 0 or not number(bed.get('temperature'))
+                or bed['temperature'] < bed['target'] - 3):
+            raise ValueError('bed_screws_requires_warm_bed')
+
     def validate(self, values, action):
         super().validate(values,action)
         if self.feature_id == 'P01' and action == 'start':
@@ -288,7 +306,9 @@ class MaintenanceProbeController(FirmwareWorkflow):
         if f == 'P06':
             return 'Z_ENDSTOP_CALIBRATE'
         if f == 'P12':
-            return 'BED_SCREWS_ADJUST'
+            bed = values.get('heater_bed') or {}
+            target = bed.get('target') if number(bed.get('target')) and bed['target'] > 0 else BED_SCREWS_TEMP
+            return 'M190 S%g\nBED_SCREWS_ADJUST' % target
         if f in ('P13','P14','P15','P16','P17'):
             return {'P13':'Z_TILT_ADJUST','P14':'QUAD_GANTRY_LEVEL',
                     'P15':'BED_TILT_CALIBRATE','P16':'DELTA_CALIBRATE',
