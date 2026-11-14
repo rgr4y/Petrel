@@ -6,6 +6,11 @@ from pathlib import Path
 import tempfile
 
 
+def nfc_shown():
+    """NFC UI shown unless PETREL_HIDE_NFC=1 (no reader fitted)."""
+    return os.environ.get('PETREL_HIDE_NFC') != '1'
+
+
 # libnfc upstream drivers. Keep model/interface choices tied to driver families;
 # individual commercial boards are not all separately named by libnfc.
 PROFILES = {

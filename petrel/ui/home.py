@@ -2,6 +2,7 @@
 from petrel.ui.theme import show_icon as show_theme_icon
 from petrel.artwork.resources import ICON_RFID_HOME_NORMAL, ICON_RFID_HOME_SELECTED
 import copy
+from petrel.features.nfc.settings import nfc_shown
 
 
 class HomeViewMixin:
@@ -14,7 +15,8 @@ class HomeViewMixin:
         entries.append(('MMU', 'MMU', self.ICON_MMU_0, self.ICON_MMU_1))
         entries.append(('DISPLAY', 'Device', self.ICON_Display_0, self.ICON_Display_1))
         entries.append(('MAINTENANCE', 'Maintenance', self.ICON_Maintenance_0, self.ICON_Maintenance_1))
-        entries.append(('RFID', 'NFC', ICON_RFID_HOME_NORMAL, ICON_RFID_HOME_SELECTED))
+        if nfc_shown():  # PETREL_HIDE_NFC=1 hides the NFC page
+            entries.append(('RFID', 'NFC', ICON_RFID_HOME_NORMAL, ICON_RFID_HOME_SELECTED))
         # Home navigation contract: append new features above Info; Info is always last.
         entries.append(('INFO', 'Info', self.ICON_Info_0, self.ICON_Info_1))
         return tuple(entries)

@@ -5,6 +5,7 @@ import petrel.features.display_settings.settings as display_settings
 import os
 import time
 from petrel.hardware.dwin.driver import T5UIC1ProtocolError
+from petrel.features.nfc.settings import nfc_shown
 
 
 class DisplaySettingsViewMixin:
@@ -105,7 +106,8 @@ class DisplaySettingsViewMixin:
                 self.lcd.Select_Color if editing else self.lcd.Color_Bg_Black, 10)
             entries.append((label, {'Buzzer': ICON_BUZZER,'Volume': ICON_VOLUME,'Click tone': ICON_CLICK_TONE,'Encoder tone': ICON_ENCODER_TONE}[label], (text, editing), painter))
         entries.append(('Event sounds', ICON_BUZZER, None, None))
-        entries.append(('NFC settings', ICON_NFC, None, None))
+        if nfc_shown():
+            entries.append(('NFC settings', ICON_NFC, None, None))
         self._display_selection = min(selection, len(entries) - 1)
         save_message = getattr(self, '_display_save_message', '')
         title = ('Device - saving...' if save_message == 'Saving...' else
@@ -131,7 +133,7 @@ class DisplaySettingsViewMixin:
                 if index == 0:
                     self.lcd.set_backlight(display_settings.raw_brightness(self._display_values[0]))
             else:
-                self._display_selection = max(0, min(5 + len(self._buzzer_rows()), selection + delta))
+                self._display_selection = max(0, min((5 if nfc_shown() else 4) + len(self._buzzer_rows()), selection + delta))
             self._display_save_message = ''
         elif event == self.ENCODER_DIFF_ENTER:
             if selection == 0:

@@ -2,6 +2,7 @@ from test_regressions import nfc_backend
 """Emergency tag enrollment and home navigation regressions (no hardware)."""
 from concurrent.futures import Future
 from pathlib import Path
+import os
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -26,6 +27,14 @@ class EmergencyTagTests(unittest.TestCase):
             keys = [row[0] for row in view._home_entries()]
             self.assertEqual(keys[-2:], ['RFID', 'INFO'])
             self.assertEqual(keys.count('INFO'), 1)
+
+    def test_hide_nfc_removes_home_page(self):
+        view = display(snapshot())
+        view._leveling_menu_entries = Mock(return_value=[])
+        with patch.dict(os.environ, {'PETREL_HIDE_NFC': '1'}):
+            keys = [row[0] for row in view._home_entries()]
+        self.assertNotIn('RFID', keys)
+        self.assertEqual(keys[-1], 'INFO')
 
     def test_enrollment_confirmation_cancel_replace_remove_and_reopen(self):
         with tempfile.TemporaryDirectory() as tmp:

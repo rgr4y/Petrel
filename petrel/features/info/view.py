@@ -10,6 +10,7 @@ from petrel.artwork.shared import PICTURE_ID as SHARED_PICTURE_ID
 from petrel.features.info.system import wifi_signal_text
 from petrel.hardware.dwin.driver import T5UIC1Display
 from petrel.artwork.resources import ICON_MCU, ICON_MACHINE, ICON_HOST, ICON_SOFTWARE
+from petrel.features.nfc.settings import nfc_shown
 
 
 class InfoViewMixin(NFCShareViewMixin):
@@ -186,9 +187,10 @@ class InfoViewMixin(NFCShareViewMixin):
                 ('row', 'Temp', 'N/A' if temperature is None else fixed(temperature)+' C'),
             ))
         nfc = info.get('nfc') or {'status': 'Reading...'}
-        items.extend((('section', 'NFC', None),
-                      ('row', 'Status', nfc.get('status', 'Unavailable'))))
-        if nfc.get('status') == 'Connected':
+        if nfc_shown():
+            items.extend((('section', 'NFC', None),
+                          ('row', 'Status', nfc.get('status', 'Unavailable'))))
+        if nfc_shown() and nfc.get('status') == 'Connected':
             for label, key in (('Model', 'model'), ('Firmware', 'firmware'),
                                ('Hardware', 'hardware'), ('libnfc', 'library'),
                                ('ISO14443A', 'iso_a'), ('ISO14443B', 'iso_b'),
