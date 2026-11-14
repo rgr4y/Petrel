@@ -81,9 +81,16 @@ class BedMeshMixin:
             entries.append(('MESH', 'Bed Mesh', ICON_BED_MESH))
         if self.pd.capabilities.screws_tilt_adjust:
             entries.append(('SCREWS', 'Screws Tilt Adjust', ICON_SCREW_ADJUST))
+        if 'bed_screws' in self.pd.state.objects:
+            entries.append(('BEDSCREWS', 'Manual Bed Screws', ICON_SCREW_ADJUST))
         if self.pd.capabilities.probe and 'manual_probe' in self.pd.state.objects:
             entries.append(('PROBE', 'Probe Calibration', ICON_PROBE_CALIBRATION))
         return tuple(entries)
+
+    def _bed_screws_row(self):
+        # Maintenance P12 = guided BED_SCREWS_ADJUST, offered when [bed_screws] exists.
+        return next((row for row in self.pd.maintenance_guided_plan()
+                     if row.feature_id == 'P12'), None)
 
     def _mesh_menu_entries(self):
         if not getattr(self, '_mesh_submenu', False):
@@ -131,6 +138,12 @@ class BedMeshMixin:
                 self.checkkey = self.ScrewsTiltMenu
                 self._screws_selection = 0
                 self.Draw_Screws_Menu()
+            elif key == 'BEDSCREWS':
+                from petrel.features.maintenance.discovery.session import idle
+                row = self._bed_screws_row()
+                if row is not None and idle(self.pd.state):
+                    self.Enter_Maintenance_Menu()
+                    self._maintenance_open('prepare', row)
             elif key == 'PROBE':
                 self.checkkey = self.ProbeWizardID
                 self._drawn_probe_wizard = None
