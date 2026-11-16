@@ -78,6 +78,8 @@ class LayerMelodyTests(TestCase):
         from test_buzzer_events import MelodyOwnerTests
         view = MelodyOwnerTests().make()
         view._event_buzzer_ready = True
+        # Layer chirp is off by default; switch it on
+        view._event_sound_values = view._event_sound_settings().toggled('LAYER_CHANGE')
         view._process_input_untraced(InputEvent('melody_LAYER_CHANGE',0,8))
         args = view._buzzer_player.play_melody.call_args
         self.assertEqual(args.args[0],'LAYER_CHANGE')

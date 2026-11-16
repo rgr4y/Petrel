@@ -62,3 +62,8 @@ class EventSounds:
         if magic != MAGIC or zlib.crc32(raw[:12]) != crc:
             return None
         return cls(disabled)
+
+    @classmethod
+    def default(cls):
+        # No saved panel record: everything on except the per-layer chirp.
+        return cls(BITS['LAYER_CHANGE'])

@@ -29,6 +29,11 @@ class EventSoundRecordTests(TestCase):
         future = EventSounds(1<<31)
         self.assertEqual(EventSounds.decode(future.toggled('BOOT').encode()).disabled,(1<<31)|BITS['BOOT'])
 
+    def test_default_mutes_only_layer_change(self):
+        values = EventSounds.default()
+        self.assertFalse(values.enabled('LAYER_CHANGE'))
+        self.assertTrue(all(values.enabled(name) for name,_ in EVENTS if name != 'LAYER_CHANGE'))
+
     def test_new_hold_bit_preserves_old_choices_and_defaults_on_for_old_records(self):
         old = EventSounds((1 << 17) - 1)
         restored = EventSounds.decode(old.encode())
@@ -58,7 +63,8 @@ class EventSoundUITests(TestCase):
         view._buzzer_load_complete=True
         view._sound_event_prefs_ready=True
         view._event_buzzer_ready=True
-        view._event_sound_values=view._event_sound_saved=view._event_sound_settings()
+        # All on; built from the view's own class (suite may import the module twice)
+        view._event_sound_values=view._event_sound_saved=type(view._event_sound_settings())(0)
         view._event_sound_selection=0
         view.checkkey=view.EventSoundsMenu
         view._buzzer_player=Mock()
@@ -119,13 +125,14 @@ class EventSoundUITests(TestCase):
             retry.set_result(view._event_sound_save_target.encode());view._poll_panel_flash()
             self.assertFalse(view._event_sound_enabled('SHUTDOWN'))
 
-    def test_missing_record_defaults_on_and_boot_waits_for_both_loads(self):
+    def test_missing_record_defaults_on_except_layer_and_boot_waits_for_both_loads(self):
         view=self.make();view._sound_event_prefs_ready=False
         view._event_buzzer_ready=False;view._boot_melody_attempted=False
         view._arm_buzzer_events()
         self.assertFalse(view._event_buzzer_ready)
         view._adopt_event_sound_record(b'\xff'*16)
-        self.assertTrue(all(view._event_sound_enabled(n) for n,_ in EVENTS))
+        self.assertFalse(view._event_sound_enabled('LAYER_CHANGE'))
+        self.assertTrue(all(view._event_sound_enabled(n) for n,_ in EVENTS if n != 'LAYER_CHANGE'))
         view._buzzer_player.play_melody.assert_called_once()
         view=self.make();view._sound_event_prefs_ready=False
         view._buzzer_load_complete=False;view._event_buzzer_ready=False
@@ -191,7 +198,7 @@ class EventSoundUITests(TestCase):
         from test_regressions import ui
         view = self.make()
         view.lcd.SUPPORTS_NONBLOCKING_FLASH = False
-        target = EventSounds().toggled('NFC_TAG_READ')
+        target = view._event_sound_settings().toggled('NFC_TAG_READ')
         view.lcd.read_flash.return_value = b'wrong'
         with self.assertRaises(ui.T5UIC1ProtocolError):
             view._toggle_event_sound('NFC_TAG_READ')

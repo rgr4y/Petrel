@@ -8,7 +8,7 @@ from petrel.hardware.dwin.driver import T5UIC1ProtocolError
 class EventSoundsViewMixin:
     def _event_sound_settings(self):
         value = getattr(self, '_event_sound_values', None)
-        return value if isinstance(value, EventSounds) else EventSounds()
+        return value if isinstance(value, EventSounds) else EventSounds.default()
 
     def _event_sound_enabled(self, name):
         return (getattr(self, '_sound_event_prefs_ready', True)
@@ -19,7 +19,7 @@ class EventSoundsViewMixin:
         self._event_sound_load_failed = False
         if getattr(self, '_event_sound_save_future', None) is not None:
             self._event_sound_save_future = None
-            self._event_sound_values = getattr(self, '_event_sound_saved', EventSounds())
+            self._event_sound_values = getattr(self, '_event_sound_saved', EventSounds.default())
             self._event_sound_message = 'Not saved'
         if asynchronous:
             self._panel_flash_lcd = self.lcd
@@ -33,8 +33,8 @@ class EventSoundsViewMixin:
                 logging.exception('Could not load event sound preferences')
 
     def _adopt_event_sound_record(self, raw):
-        # Missing/invalid record is the first-install/upgrade default: all enabled.
-        values = EventSounds.decode(raw) or EventSounds()
+        # Missing/invalid record is the first-install/upgrade default: all but LAYER_CHANGE.
+        values = EventSounds.decode(raw) or EventSounds.default()
         self._event_sound_load_failed = False
         if getattr(self, '_event_sound_message', '') in ('Loading...', 'Read failed'):
             self._event_sound_message = ''
@@ -65,7 +65,7 @@ class EventSoundsViewMixin:
                     self._event_sound_load_failed = True
                     self._event_sound_message = 'Read failed'
                 if kind == 'save':
-                    self._event_sound_values = getattr(self, '_event_sound_saved', EventSounds())
+                    self._event_sound_values = getattr(self, '_event_sound_saved', EventSounds.default())
                     self._event_sound_message = 'Not saved'
                 logging.warning('Event sounds Flash %s failed: %s', kind, error)
             changed = True
