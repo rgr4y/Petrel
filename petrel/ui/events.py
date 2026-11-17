@@ -66,6 +66,12 @@ class UIEventLoop:
             return False
         return True
 
+    def input_pending(self):
+        """True when a rotation or press is already queued behind the current event."""
+        with self._queue.mutex:
+            return any(isinstance(event, InputEvent) and event.kind in ('rotate', 'press')
+                       for event in self._queue.queue)
+
     def post_coalesced(self, event):
         """Retain latest state notifications even when the input queue is full.
 

@@ -2,7 +2,7 @@
 from petrel.features.buzzer.event_view import EventSoundsViewMixin
 from dataclasses import replace
 import logging
-from petrel.ui.events import InputEvent
+from petrel.ui.events import InputEvent, UIEventLoop
 from petrel.features.buzzer.control import Settings, Player, TONES
 from petrel.hardware.dwin.driver import T5UIC1ProtocolError
 
@@ -16,6 +16,12 @@ class BuzzerViewMixin(EventSoundsViewMixin):
         return self._buzzer_settings().enabled
 
     def _buzzer_feedback(self, kind):
+        # Feedback sounds when the UI processes an event, not at the detent.
+        # A newer knob event already queued supersedes this one, so a lagging
+        # backlog drains silently and only its last event beeps.
+        loop = getattr(self, '_loop', None)
+        if isinstance(loop, UIEventLoop) and loop.input_pending():
+            return
         settings = self._buzzer_settings()
         if settings.enabled and settings.volume:
             if getattr(self, '_buzzer_player', None) is None:
