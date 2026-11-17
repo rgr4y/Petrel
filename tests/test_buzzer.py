@@ -330,6 +330,20 @@ class BuzzerMenuTests(unittest.TestCase):
         view._emergency_buzzer_feedback()
         view._buzzer_player.play_emergency.assert_not_called()
 
+    def test_newer_queued_knob_event_supersedes_feedback(self):
+        from petrel.ui.events import InputEvent, UIEventLoop
+        view = self.view()
+        view._buzzer_player = Mock()
+        view._loop = UIEventLoop(Mock(), Mock(), Mock(), Mock())
+        view._loop.post(InputEvent('case_light_status', 0, 1, 1))
+        view._buzzer_feedback('rotate')
+        view._buzzer_player.play.assert_called_once_with(Settings(), 'rotate')
+        view._buzzer_player.reset_mock()
+        for kind in ('rotate', 'press'):
+            view._loop.post(InputEvent(kind, 1, 1, 1))
+            view._buzzer_feedback('rotate')
+        view._buzzer_player.play.assert_not_called()
+
     def test_input_plays_once_per_physical_event_and_never_for_stale_event(self):
         from petrel.ui.events import InputEvent
         view = self.view()
