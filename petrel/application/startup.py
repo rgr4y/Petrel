@@ -16,6 +16,7 @@ def default_buzzer_settings():
     return BuzzerSettings(enabled=os.environ.get('PETREL_BUZZER_DEFAULT_OFF') != '1')
 from petrel.hardware.dwin.startup import PanelProbe
 from petrel.hardware.dwin.driver import T5UIC1Display, T5UIC1ProtocolError
+import petrel.hardware.dwin.dacai as dacai
 
 
 class PanelStartupMixin:
@@ -203,8 +204,10 @@ class PanelStartupMixin:
                 options['packet_observer'] = self._emulator
             if getattr(self, '_boot_active', False):
                 options['startup_progress'] = lambda lcd, value: self._draw_boot_progress(value, lcd)
-            self.lcd = T5UIC1Display(self._settings[0], handshake_timeout=1.0,
-                                 handshake_attempts=1, **options)
+            # configure.sh selects the panel type (PETREL_DACAI).
+            display = dacai.DacaiDriver if dacai.enabled() else T5UIC1Display
+            self.lcd = display(self._settings[0], handshake_timeout=1.0,
+                               handshake_attempts=1, **options)
             if getattr(self, '_spool_scan_reconnect_stop', False):
                 from petrel.artwork.resources import ICON_NFC_SPOOL_FIRST, ICON_NFC_SPOOL_LAST
                 first, last = getattr(self, '_spool_scan_range',

@@ -8,7 +8,6 @@ renderers used by Petrel to preserve its current visual output.
 
 import logging
 import math
-import os
 import struct
 import time
 import unicodedata
@@ -23,9 +22,6 @@ from petrel.hardware.dwin.transport import open_display_serial
 import petrel.features.buzzer.control as buzzer_control
 import serial
 from petrel.ui.theme import BACKGROUND_COLOR
-
-# DACAI: thumbnails drawn from rectangles instead of SRAM JPEG (0x24).
-RECT_THUMBNAILS = os.environ.get('PETREL_RECT_THUMBNAILS') == '1'
 
 
 class T5UIC1ProtocolError(RuntimeError):
@@ -57,6 +53,14 @@ class T5UIC1Display:
     TAIL = b"\xCC\x33\xC3\x3C"
 
     WIDTH = 272
+    # Highest picture ID accepted by 0x22/0x25/0x33 (panel subclasses may raise it).
+    PICTURE_ID_MAX = 15
+    # Accept a bare A5 'OK' data-Flash acknowledgement (see protocol.take_response).
+    BARE_FLASH_ACK = False
+    # Packet dialect announced to the emulator (packet_observer.reset_panel).
+    PANEL_PROTOCOL = 'dwin'
+    # True when show_sram_jpeg cannot filter black: thumbnails need a background.
+    OPAQUE_SRAM_JPEG = False
     HEIGHT = 480
     SRAM_SIZE = 32 * 1024
     FLASH_SIZE = 16 * 1024
@@ -176,7 +180,7 @@ class T5UIC1Display:
 
         try:
             if packet_observer is not None:
-                packet_observer.reset_panel()
+                packet_observer.reset_panel(protocol=self.PANEL_PROTOCOL)
             if connected_serial is None:
                 time.sleep(wake_delay)
                 for _ in range(handshake_attempts):
@@ -184,14 +188,10 @@ class T5UIC1Display:
                         break
                 else:
                     raise T5UIC1TimeoutError("DWIN handshake timed out")
+            self._after_handshake()
             # The panel CFG already selects portrait orientation. Preserve
             # its power-on picture instead of reapplying direction via 0x34.
-            # DACAI panels (e.g. Ender 3 Max Neo) load artwork from their
-            # microSD 'private' folder; UART Picture Flash writes corrupt them.
-            sd_assets = os.environ.get('PETREL_LCD_SD_ASSETS') == '1'
-            if not sd_assets:
-                from petrel.artwork.boot import sync
-                sync(self)
+            self._startup_sync_boot_artwork()
             # Present the complete boot frame before packing/checking icons.
             # Existing panel icons can animate throughout an unchanged sync.
             if startup_progress is not None:
@@ -199,11 +199,8 @@ class T5UIC1Display:
                 self.show_jpeg(0)
                 startup_progress(self, 40)
                 self.update()
-            if sd_assets:
-                self._assets_synced = True
-            else:
-                self._startup_sync_icons()
-                self._startup_sync_shared_artwork()
+            self._startup_sync_icons()
+            self._startup_sync_shared_artwork()
             from petrel.artwork.resources import ICON_LIBRARY_ID
             self._boot_animation_library = ICON_LIBRARY_ID
             if startup_progress is not None:
@@ -215,6 +212,9 @@ class T5UIC1Display:
             self.close()
             raise
 
+    def _after_handshake(self):
+        """Panel-specific link setup before any artwork is checked."""
+
     def _startup_animation_library(self):
         """Use only a verified resident directory during library migration."""
         from petrel.artwork.icon_library import METADATA_ADDRESS, METADATA_SIZE, parse_metadata
@@ -225,6 +225,10 @@ class T5UIC1Display:
             if hashes and any(hashes[0]):
                 return raw[8]
         return None  # First install/incomplete directory: animate after upload.
+
+    def _startup_sync_boot_artwork(self):
+        from petrel.artwork.boot import sync
+        sync(self)
 
     def _startup_sync_icons(self):
         from petrel.artwork.icon_library import sync_library
@@ -333,7 +337,7 @@ class T5UIC1Display:
 
     def _parse_rx(self):
         while True:
-            response = dwin_protocol.take_response(self._rx)
+            response = dwin_protocol.take_response(self._rx, bare_flash_ack=self.BARE_FLASH_ACK)
             if response is None:
                 return
             command, payload = response
@@ -780,8 +784,8 @@ class T5UIC1Display:
         self._send(0x21, self._words(x, y) + bytes((pixel_size,)) + data)
 
     def show_jpeg(self, jpeg_id):
-        if not isinstance(jpeg_id, int) or not 0 <= jpeg_id <= 15:
-            raise ValueError("JPEG ID must be 0..15")
+        if not isinstance(jpeg_id, int) or not 0 <= jpeg_id <= self.PICTURE_ID_MAX:
+            raise ValueError(f"JPEG ID must be 0..{self.PICTURE_ID_MAX}")
         self._send(0x22, bytes((0, jpeg_id)))
 
     def show_icon(self, library_id, icon_ids, x, y, *, background=True,
@@ -798,59 +802,12 @@ class T5UIC1Display:
     def show_sram_jpeg(self, x, y, address=0, *, background=True, enhanced=False):
         if not isinstance(address, int) or not 0 <= address < self.SRAM_SIZE:
             raise ValueError("SRAM address outside 32KB range")
-        if RECT_THUMBNAILS:
-            self._draw_shadow_jpeg(x, y, address, background)
-            return
         mode = (bool(background) << 7) | (bool(enhanced) << 5)
         self._send(0x24, self._words(x, y) + bytes((mode,)) + self._word(address))
 
-    def _draw_shadow_jpeg(self, x, y, address, background, tolerance=10, black=24):
-        shadow = getattr(self, '_sram_shadow', None)
-        if shadow is None:
-            return
-        end = shadow.find(b'\xff\xd9', address)
-        if end < 0:
-            return
-        try:
-            import io
-            from PIL import Image
-            img = Image.open(io.BytesIO(bytes(shadow[address:end + 2]))).convert('RGB')
-        except Exception:
-            logging.exception('Thumbnail decode failed')
-            return
-        w, h = img.size
-        px = img.load()
-        frames = bytearray()
-        for yy in range(h):
-            xx = 0
-            while xx < w:
-                c = px[xx, yy]
-                if not background and max(c) < black:
-                    xx += 1
-                    continue
-                start, acc = xx, [c]
-                xx += 1
-                while xx < w:
-                    c2 = px[xx, yy]
-                    if not background and max(c2) < black:
-                        break
-                    if max(abs(a - b) for a, b in zip(c2, acc[0])) > tolerance:
-                        break
-                    acc.append(c2)
-                    xx += 1
-                n = len(acc)
-                r, g, b = (sum(v[i] for v in acc) // n for i in range(3))
-                color = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
-                frames += (self.HEADER + b'\x05\x01' +
-                           struct.pack('>HHHHH', color, x + start, y + yy, x + xx - 1, y + yy) + self.TAIL)
-        with self._transaction_lock:
-            for i in range(0, len(frames), 2048):
-                self.serial.write(bytes(frames[i:i + 2048]))
-        self._needs_update = True
-
     def cache_jpeg(self, jpeg_id, area=1):
-        if not isinstance(jpeg_id, int) or not 0 <= jpeg_id <= 15:
-            raise ValueError("JPEG ID must be 0..15")
+        if not isinstance(jpeg_id, int) or not 0 <= jpeg_id <= self.PICTURE_ID_MAX:
+            raise ValueError(f"JPEG ID must be 0..{self.PICTURE_ID_MAX}")
         if area != 1:
             raise ValueError("cache-only JPEG loading supports virtual area 1; use show_jpeg for area 0")
         self._send(0x25, bytes((area, jpeg_id)))
@@ -860,6 +817,10 @@ class T5UIC1Display:
         """Reuse Area 1 until another picture or connection replaces it."""
         if getattr(self, '_cached_picture1', None) != jpeg_id:
             self.cache_jpeg(jpeg_id)
+
+    def prepare_picture(self, data):
+        """Bytes to place in SRAM before store_sram_as_picture."""
+        return data
 
     def copy_cache1(self, x0, y0, x1, y1, x, y):
         self._send(0x26, self._words(x0, y0, x1, y1, x, y))
@@ -922,13 +883,6 @@ class T5UIC1Display:
             raise ValueError("memory write must not be empty")
         if not 0 <= address < limit or address + len(data) > limit:
             raise ValueError("memory write outside selected memory range")
-
-        if memory == self.MEMORY_SRAM and RECT_THUMBNAILS:
-            shadow = getattr(self, '_sram_shadow', None)
-            if shadow is None:
-                shadow = self._sram_shadow = bytearray(self.SRAM_SIZE)
-            shadow[address:address + len(data)] = data
-            return
 
         with self._transaction_lock:
             offset = 0
@@ -1188,8 +1142,8 @@ class T5UIC1Display:
         return self.read_memory(self.MEMORY_FLASH, address, length, timeout=timeout)
 
     def store_sram_as_picture(self, picture_id, *, timeout=2.5):
-        if not isinstance(picture_id, int) or not 0 <= picture_id <= 15:
-            raise ValueError("picture ID must be 0..15")
+        if not isinstance(picture_id, int) or not 0 <= picture_id <= self.PICTURE_ID_MAX:
+            raise ValueError(f"picture ID must be 0..{self.PICTURE_ID_MAX}")
         if getattr(self, '_cached_picture1', None) == picture_id:
             self._cached_picture1 = None
         with self._transaction_lock:

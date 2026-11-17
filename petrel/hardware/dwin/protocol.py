@@ -23,7 +23,7 @@ def aux_frames(data):
         offset = end
 
 
-def take_response(buffer):
+def take_response(buffer, *, bare_flash_ack=False):
     """Remove one complete valid inbound frame, or return None for partial RX.
 
     Mutates the caller-owned bytearray, preserving incomplete frames. Discards
@@ -31,18 +31,20 @@ def take_response(buffer):
     """
     while True:
         start = buffer.find(HEADER)
-        # Some Creality panels (e.g. Ender 3 Max Neo) acknowledge data-Flash
-        # writes with a bare A5 'OK' instead of a framed 0x31 reply.
-        bare = buffer.find(BARE_FLASH_ACK)
-        if bare >= 0 and (start < 0 or bare < start):
-            del buffer[:bare + len(BARE_FLASH_ACK)]
-            return 0x31, BARE_FLASH_ACK
+        if bare_flash_ack:
+            # DACAI panels acknowledge data-Flash writes with a bare A5 'OK'
+            # instead of a framed 0x31 reply.
+            bare = buffer.find(BARE_FLASH_ACK)
+            if bare >= 0 and (start < 0 or bare < start):
+                del buffer[:bare + len(BARE_FLASH_ACK)]
+                return 0x31, BARE_FLASH_ACK
         if start < 0:
-            # Keep a possibly incomplete bare ACK prefix for the next read.
-            for keep in (2, 1):
-                if bytes(buffer[-keep:]) == BARE_FLASH_ACK[:keep]:
-                    del buffer[:-keep]
-                    return None
+            if bare_flash_ack:
+                # Keep a possibly incomplete bare acknowledgement for the next read.
+                for keep in (2, 1):
+                    if bytes(buffer[-keep:]) == BARE_FLASH_ACK[:keep]:
+                        del buffer[:-keep]
+                        return None
             buffer.clear()
             return None
         if start:
